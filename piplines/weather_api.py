@@ -1,12 +1,20 @@
 #%%
+# weather api packages
 from datetime import datetime, timedelta
 import pandas as pd
 import time
 import openmeteo_requests
-
 import pandas as pd
 import requests_cache
 from retry_requests import retry
+
+# snowflake conncetions packages
+import os
+import base64
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from dotenv import load_dotenv, find_dotenv
+import snowflake.connector
 
 #%%
 def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
@@ -130,12 +138,6 @@ def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
 	
 	return final_df
 		
-#%%
-start_date = "2023-09-07"
-end_date = "2023-09-07"
-data = get_weather_data(start_date, end_date)
-
-
 # %%
 
 def get_historical_weather(start_date: str, end_date: str) -> pd.DataFrame:
@@ -169,9 +171,68 @@ def get_historical_weather(start_date: str, end_date: str) -> pd.DataFrame:
 	
 	all_weather = pd.concat(daily_dfs, ignore_index=True) if daily_dfs else pd.Dataframe()
 	return all_weather
+
 # %%
+#-----------------------------------------------------------------
+# Testing Snowflake connectability
+#-----------------------------------------------------------------
+
+# load the .env()
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(env_path, override=True)
+
+# read the connection information
+user = os.getenv("SNOWFLAKE_USER")
+account = os.getenv("SNOWFLAKE_ACCOUNT")
+role = os.getenv("SNOWFLAKE_ROLE")
+warehouse = os.getenv("SNOWFLAKE_WAREHOUSE")
+database = os.getenv("SNOWFLAKE_DATABASE")
+schema = os.getenv("SNOWFLAKE_SCHEMA")
+
+# Load private key from B64
+key_b64 = os.getenv("SNOWFLAKE_PRIVATE_KEY_B64")
+key_pass = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
+
+print("Loaded B64 env var?", bool(key_b64), "length:" if key_b64 else "", len(key_b64) if key_b64 else "")
+
+# Load the private b64 key into snowflake readable format
+private_key = serialization.load_pem_private_key(
+    base64.b64decode(key_b64),
+    password=(key_pass.encode() if key_pass else None),
+    backend=default_backend()
+).private_bytes(
+    encoding=serialization.Encoding.DER,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+)
+
+# Try connecting
+conn = snowflake.connector.connect(
+    user=user,
+    account=account,
+    role=role,
+    warehouse=warehouse,
+    database=database,
+    schema=schema,
+    private_key=private_key,
+)
+
+cursor = conn.cursor()
+cursor.execute("SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA();")
+print("✅ Connection successful!")
+print(cursor.fetchall())
+
+cursor.close()
+conn.close()
+
+# %%
+#-----------------------------------------------------------------
+# Function Testing
+#----------------------------------------------------------------
+
 start_date = "2023-09-01"
 end_date = "2023-9-10"
 
 many_days = get_historical_weather(start_date, end_date)
 # %%
+
