@@ -1,4 +1,3 @@
-#%%
 # weather api packages
 from datetime import datetime, timedelta
 import pandas as pd
@@ -13,10 +12,13 @@ import os
 import base64
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from snowflake.connector.pandas_tools import write_pandas
 from dotenv import load_dotenv, find_dotenv
 import snowflake.connector
 
-#%%
+#---------------------------------------------------------------
+# Function to call the open meteo API
+#---------------------------------------------------------------
 def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
 	"""
     Fetch daily weather data for a set of cities from Open-Meteo. Start date must be before end date.
@@ -124,7 +126,7 @@ def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
 			"sunset":  pd.to_datetime(sunset_unix,  unit="s", utc=True),
 			"sunrise": pd.to_datetime(sunrise_unix,  unit="s", utc=True),
 			"Latitude": lat,
-			"Longitidue" : lon
+			"Longitude" : lon
 		})
 		
 		# Add the city
@@ -137,8 +139,11 @@ def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
 	final_df = pd.concat(daily_dfs, ignore_index=True)
 	
 	return final_df
-		
-# %%
+
+#----------------------------------------------------------------
+# Use the open meteo API call function to pull individuals days
+# for a large date range
+#----------------------------------------------------------------
 
 def get_historical_weather(start_date: str, end_date: str) -> pd.DataFrame:
 	'''
@@ -170,69 +175,118 @@ def get_historical_weather(start_date: str, end_date: str) -> pd.DataFrame:
 	
 	
 	all_weather = pd.concat(daily_dfs, ignore_index=True) if daily_dfs else pd.Dataframe()
+	print(f"Successfully pulled weather data from {start_date} to {end_date}")
 	return all_weather
 
-# %%
 #-----------------------------------------------------------------
-# Testing Snowflake connectability
+# SnowFlake connection helper function
 #-----------------------------------------------------------------
+def get_snowflake_connection(schema: str = "RAW"):
+	"""
+    Establish a Snowflake connection with a dynamic schema.
+    Warehouse and database remain fixed.
+    
+    Args:
+        schema (str): Target Snowflake schema to connect to.
+    
+    Returns:
+        snowflake.connector.connection.SnowflakeConnection
+    """
+	
+	# load the .env()
+	env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+	load_dotenv(env_path, override=True)
 
-# load the .env()
-env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-load_dotenv(env_path, override=True)
+	# read the connection information
+	user = os.getenv("SNOWFLAKE_USER")
+	account = os.getenv("SNOWFLAKE_ACCOUNT")
+	role = os.getenv("SNOWFLAKE_ROLE")
+	warehouse = os.getenv("SNOWFLAKE_WAREHOUSE")
+	database = os.getenv("SNOWFLAKE_DATABASE")
 
-# read the connection information
-user = os.getenv("SNOWFLAKE_USER")
-account = os.getenv("SNOWFLAKE_ACCOUNT")
-role = os.getenv("SNOWFLAKE_ROLE")
-warehouse = os.getenv("SNOWFLAKE_WAREHOUSE")
-database = os.getenv("SNOWFLAKE_DATABASE")
-schema = os.getenv("SNOWFLAKE_SCHEMA")
+	# Load private key from B64
+	key_b64 = os.getenv("SNOWFLAKE_PRIVATE_KEY_B64")
+	key_pass = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
 
-# Load private key from B64
-key_b64 = os.getenv("SNOWFLAKE_PRIVATE_KEY_B64")
-key_pass = os.getenv("SNOWFLAKE_PRIVATE_KEY_PASSPHRASE")
+	# Load the private b64 key into snowflake readable format
+	private_key = serialization.load_pem_private_key(
+		base64.b64decode(key_b64),
+		password=(key_pass.encode() if key_pass else None),
+		backend=default_backend()
+	).private_bytes(
+		encoding=serialization.Encoding.DER,
+		format=serialization.PrivateFormat.PKCS8,
+		encryption_algorithm=serialization.NoEncryption(),
+	)
 
-print("Loaded B64 env var?", bool(key_b64), "length:" if key_b64 else "", len(key_b64) if key_b64 else "")
+	# Try connecting
+	conn = snowflake.connector.connect(
+		user=user,
+		account=account,
+		role=role,
+		warehouse=warehouse,
+		database=database,
+		schema=schema,
+		private_key=private_key,
+	)
 
-# Load the private b64 key into snowflake readable format
-private_key = serialization.load_pem_private_key(
-    base64.b64decode(key_b64),
-    password=(key_pass.encode() if key_pass else None),
-    backend=default_backend()
-).private_bytes(
-    encoding=serialization.Encoding.DER,
-    format=serialization.PrivateFormat.PKCS8,
-    encryption_algorithm=serialization.NoEncryption(),
-)
+	cursor = conn.cursor()
+	cursor.execute("SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA();")
+	print("✅ Connection successful!")
+	print(cursor.fetchall())
 
-# Try connecting
-conn = snowflake.connector.connect(
-    user=user,
-    account=account,
-    role=role,
-    warehouse=warehouse,
-    database=database,
-    schema=schema,
-    private_key=private_key,
-)
+	return conn
 
-cursor = conn.cursor()
-cursor.execute("SELECT CURRENT_USER(), CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA();")
-print("✅ Connection successful!")
-print(cursor.fetchall())
 
-cursor.close()
-conn.close()
-
-# %%
-#-----------------------------------------------------------------
-# Function Testing
 #----------------------------------------------------------------
+# Upload data to snow flake
+#----------------------------------------------------------------
+def upload_weather_data(start_date: str, end_date: str, table: str = "HANSEND_WEATHER"):
+	'''
+		Land weather data in the RAW schema for the snowflake connection
+		Args:
+			start_date: string in "YYYY-MM-DD" Format
+			end_date: string in "YYYY-MM-DD" Format
+	'''
+	
+	# Get the weather data
+	df = get_historical_weather(start_date, end_date)
 
-start_date = "2023-09-01"
-end_date = "2023-9-10"
+	stage_tbl = f"{table}_STAGE_TMP"
+	cols_upper = [c.upper() for c in df.columns]
+	
+	# 3. build the pieces for the merge sql command
+	stage_tbl = f"{table}_STAGE_TMP"
+	cols_upper = [c.upper() for c in df.columns]
+	non_key = [c for c in cols_upper if c not in ("DATE", "CITY")]
+	set_clause = ", ".join([f"tgt.{c}=src.{c}" for c in non_key])
+	insert_cols = ", ".join(cols_upper)
+	insert_vals = ", ".join([f"src.{c}" for c in cols_upper])
 
-many_days = get_historical_weather(start_date, end_date)
-# %%
+	with get_snowflake_connection() as conn:
+		with conn.cursor() as cur:
+			cur.execute(f"CREATE OR REPLACE TEMPORARY TABLE {stage_tbl} LIKE {table}")
 
+			ok, _, nrows, _ = write_pandas(
+				conn,
+				df,
+				table_name=stage_tbl,
+				quote_identifiers=False,
+				use_logical_type=True
+			)
+			if not ok:
+				print(f"Failed to upload for {start_date} to {end_date}")
+				return
+			
+			merge_sql = f"""
+				MERGE INTO {table} AS tgt
+				USING {stage_tbl} AS src
+				ON tgt.DATE = src.DATE AND tgt.CITY = src.CITY
+				WHEN MATCHED THEN UPDATE SET {set_clause}
+				WHEN NOT MATCHED THEN INSERT ({insert_cols}) VALUES ({insert_vals});
+			"""
+		with conn.cursor() as cur:
+			cur.execute(merge_sql)
+	
+	print(f"Weather data uploaded into {table} for {start_date} to {end_date}")
+		
