@@ -1,18 +1,15 @@
 from airflow.decorators import dag, task
 from datetime import datetime, timedelta
-
-#%%
 import sys
 from pathlib import Path
 
+# Get the weather_api uploading function
 ROOT = Path(__file__).resolve().parents[1]  # parent of dags/ = project root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-#%%
 from piplines.weather_api import upload_weather_data
 
-#%%
+
 @dag(
     dag_id="Upload_weather_data_daily",
     start_date=datetime(2024, 9, 1),
@@ -39,5 +36,3 @@ def weather_loader():
     load_for_interval()
 
 dag = weather_loader()
-
-#%%

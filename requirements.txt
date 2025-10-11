@@ -5,3 +5,10 @@ pandas
 pandas_market_calendars
 datetime
 git+https://github.com/m0rp43us/openmeteopy
+openmeteo-requests
+requests-cache
+retry-requests
+python-dotenv
+cryptography
+snowflake-connector-python[pandas]
+pyarrow
