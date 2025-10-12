@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]  # parent of dags/ = project root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-from pipelines.weather_api import upload_weather_data
+from piplines.weather_api import upload_weather_data
 
 
 @dag(
