@@ -173,7 +173,7 @@ def get_historical_weather(start_date: str, end_date: str) -> pd.DataFrame:
 		data = get_weather_data(cur_str, cur_str)
 		daily_dfs.append(data)
 		cur += timedelta(days = 1)
-		time.sleep(1)
+		time.sleep(2)
 	
 	
 	all_weather = pd.concat(daily_dfs, ignore_index=True) if daily_dfs else pd.Dataframe()
