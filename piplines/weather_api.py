@@ -84,6 +84,7 @@ def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
 		"start_date": start_date,
 		"end_date": end_date,
 		"daily": ["weather_code", "temperature_2m_min", "temperature_2m_max", "rain_sum", "precipitation_sum", "precipitation_hours", "wind_speed_10m_max", "wind_gusts_10m_max", "daylight_duration", "sunset", "sunrise"],
+		"timezone": "UTC", 
 	}
 	responses = openmeteo.weather_api(url, params=params)
 
@@ -131,6 +132,7 @@ def get_weather_data(start_date: str, end_date: str) -> pd.DataFrame:
 		
 		# Add the city
 		df["city"] = city
+		df["date"] = pd.to_datetime(df["date"], utc=True).dt.date
 		
 		# concate the dataframes
 		daily_dfs.append(df)
