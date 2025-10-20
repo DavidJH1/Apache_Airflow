@@ -18,12 +18,13 @@ BUFFER_DAYS = 3
 
 @dag(
     dag_id="Upload_weather_data_daily",
-    start_date=datetime(2024, 9, 1),
-    schedule="15 6 * * *",  
-    catchup=False,
+    start_date=datetime(2025, 10, 10),
+    schedule="@daily",  
+    catchup=True,
     max_active_runs=1,
     tags = ["weather", "snowflake"],
 )
+
 
 def weather_loader():
     @task
