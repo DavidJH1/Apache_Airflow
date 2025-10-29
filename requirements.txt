@@ -12,4 +12,3 @@ python-dotenv
 cryptography
 snowflake-connector-python[pandas]
 pyarrow
-parakimo<3

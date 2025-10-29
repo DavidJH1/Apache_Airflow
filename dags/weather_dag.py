@@ -18,7 +18,7 @@ BUFFER_DAYS = 3
 
 @dag(
     dag_id="Upload_weather_data_daily",
-    start_date=datetime(2025, 10, 10),
+    start_date=datetime(2025, 10, 17),
     schedule="@daily",  
     catchup=True,
     max_active_runs=1,
