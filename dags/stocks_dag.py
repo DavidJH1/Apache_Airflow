@@ -16,7 +16,7 @@ from piplines.stocks_api import upload_stock_data
 # %%
 @dag(
     dag_id="Upload_stock_data_daily",
-    start_date=datetime(2025, 10, 25),
+    start_date=datetime(2025, 10, 3),
     schedule="@daily",  
     catchup=True,
     max_active_runs=1,
