@@ -1,50 +1,56 @@
-# Student Airflow Template
+## 🚀 Automated ETL Pipelines with Apache Airflow, Snowflake, and Python
 
-This is a ready-to-run Apache Airflow + Docker environment designed for classroom use. Students can use this to run Airflow DAGs that connect to MongoDB and process stock data.
+A semester-long data engineering project by David Hansen
 
-## Before You Start
+This project showcases a fully containerized Apache Airflow 3.0 environment orchestrating end-to-end ETL pipelines for real-world data sources. It demonstrates production-style workflows including daily incremental loads, historical backfills, SSH-tunneled data extraction, and Snowflake warehousing.
 
-1. Clone the repo or click "Use this template"
-2. Open the cloned repo in VS Code
+## 📌 Key Features
+### 🌀 Orchestration with Apache Airflow 3.0
 
-3. Run the airflow-core-fernet-key.py script to generate a fernet key. This key is used to encrypt sensitive data in Airflow, such as passwords and connection strings. You can run this script in your terminal or command prompt.
+DAGs for daily incremental ingestion and historical backfill.
 
-you might need to install the `cryptography` library if you don't have it already. You can do this by running:
-```bash
-pip install cryptography
-```
+### 🐳 Full Docker Deployment
 
-Then, run the script:
-```bash
-python airflow-core-fernet-key.py
-```
-4. Copy the generated fernet key and paste it into the `editme.env` file in the `FERNET_KEY` variable. Then rename the file to just `.env` (remove the `editme` part).
+Snowflake Python connector libraries baked in
 
-5. Make sure you have Docker and Docker Compose installed on your machine. You can download them from the official Docker website. Here is the link: https://docs.docker.com/get-docker/
+All services are configured with persistent volumes and environment variables.
 
+### ❄️ Snowflake Data Warehouse Integration
 
-## ✅ Getting Airflow Started
+The pipelines support:
 
-1. In that VS Code Terminal Run:
+Private-key Snowflake authentication
 
-```bash
-docker compose up --build -d
-```
+RAW → MODELED table design
 
-2. Open [http://localhost:8080](http://localhost:8080)
+Daily UPSERT logic using Snowflake MERGE
 
-Login with:
-- **Username:** `airflow`
-- **Password:** `airflow`
+Backfills for custom date ranges
 
+Handling UTC ↔ local timezone conversion
 
-## shut down
+Efficient batching using write_pandas() and staging tables
 
-```bash
-docker compose down
-```
+### 📥 Multi-source Data Ingestion
 
-<!-- https://airflow.apache.org/docs/apache-airflow/stable/tutorial/index.html -->
-<!-- https://airflow.apache.org/docs/apache-airflow/stable/tutorial/fundamentals.html -->
-<!-- https://www.youtube.com/watch?v=ouERCRRvkFQ -->
-<!-- https://www.youtube.com/watch?v=RXWYPZ3T9ys -->
+This project ingests several real data systems:
+
+1. Open Meteo Weather API 
+
+Historical daily API pulls and pushes to Snowflake 
+
+Pulls data for 20 major cities across the United States
+
+2. SFTP / SSH News Feed
+
+Uses Paramiko for secure SSH tunneling
+
+Pulls CSVs from a restricted backend system hosted on a non-standard port
+
+Automatically detects new files, downloads, and merges them
+
+3. MongoDB Tunnel Ingestion (S&P 500 Stock Dataset)
+
+Connects through SSH port forwarding
+
+Pulls daily stock price documents into Snowflake
